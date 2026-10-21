@@ -4,6 +4,7 @@
 
 - 提示词全部**预先生成并冻结**在 `prepared/` 和 `pairvul/prepared/` 中，SHA-256 记录在 `manifest.json` 里，请不要修改。
 - 所有检索类条件的知识库都是**完整的官方训练集**：PrimeVul 3,789 个修复对，PairVul 2,317 个修复对。
+- **所有条件都必须开启思考模式**：公共参数里的 `--thinking on` 不要删掉，也不要改成别的值。上一轮的 direct 和 VulTrial 也是在思考模式下跑的，本轮必须一致。
 - **不需要先在开发集上试跑**，按下面的命令直接跑全量即可。
 
 ## 这一轮包括哪三组实验
@@ -76,6 +77,12 @@ python online/run_online.py run --condition graph_hint_v2 $M
 python online/run_online.py run --condition graph_diff_v2_noguard $M
 ```
 
+**确认思考模式已开启**：第一条命令跑出几十个函数后，运行下面的命令。输出的两个数应该相等；如果第二个数是 0，说明思考没有开启，请先停下来联系我们。
+
+```bash
+python -c "import json,sys; ok=[r for r in (json.loads(l) for l in open(sys.argv[1], encoding='utf-8') if l.endswith('}\n')) if r.get('status')=='ok']; print(len(ok), 'ok;', sum(r.get('reasoning_chars', 0) > 0 for r in ok), 'with thinking')" results/predictions_graph_diff_v2_qwen3.8-max-0902.jsonl
+```
+
 打分：
 
 ```bash
@@ -118,7 +125,7 @@ python online/run_online.py score --baseline graph_diff_v2_qwen3.8-max-0902 > re
 | 报错 | 处理 |
 |---|---|
 | `HTTP 400`，提到 `seed` | 加 `--seed -1` |
-| `HTTP 400`，提到 `enable_thinking` | 加 `--thinking default` |
+| `HTTP 400`，提到 `enable_thinking` | **不要**改成 `--thinking default` 或 `off`，请先停下来联系我们 |
 | `HTTP 429`（请求太频繁） | 降低并发，例如 `--workers 4` |
 
 ## 打分各列的含义
