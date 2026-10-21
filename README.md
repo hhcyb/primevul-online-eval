@@ -17,7 +17,6 @@
 | `graph_diff_v2` → `verify_graph_diff_v2` | **我们的方法**，分两步：<br>1. 锚点检索取 3 个历史修复，以修复前后的 diff 附在目标函数之后，让模型判断；<br>2. 保护核查：只对第一步判为有漏洞的函数再问一次，其余沿用第一步的结果 | 运行 |
 | `direct` | 基线：同一个模型，只给目标函数，让它先推理再下结论（CoT） | 上一轮已跑 |
 | `vultrial` | 基线：VulTrial（ICSE 2026，模拟法庭的多智能体方法），在同一个模型上复现 | 上一轮已跑 |
-| `zero_shot` | 基线：零样本，Vul-RAG 仓库的基础提示词，逐字使用 | 可选 |
 
 ### 实验二：消融实验（PrimeVul，435 对）
 
@@ -75,8 +74,6 @@ python online/run_online.py run --condition verify_graph_diff_v2 --stage1 result
 python online/run_online.py run --condition graph_diff_text_v2 $M
 python online/run_online.py run --condition graph_hint_v2 $M
 python online/run_online.py run --condition graph_diff_v2_noguard $M
-# 实验一的可选基线（看预算）
-python online/run_online.py run --condition zero_shot $M
 ```
 
 打分：
@@ -103,12 +100,11 @@ python online/run_online.py score --baseline graph_diff_v2_qwen3.8-max-0902 > re
 |---|---|---:|
 | 实验一 | graph_diff_v2 | 870 |
 | 实验一 | verify_graph_diff_v2 | 约 700 |
-| 实验一 | zero_shot（可选） | 870 |
 | 实验二 | graph_diff_text_v2、graph_hint_v2、graph_diff_v2_noguard | 各 870 |
 | 实验三 | graph_diff_v2 | 1,172 |
 | 实验三 | verify_graph_diff_v2 | 约 900 |
 
-不含 zero_shot，合计约 6,250 次。
+合计约 6,250 次。
 
 ## 注意事项
 
@@ -135,23 +131,3 @@ python online/run_online.py score --baseline graph_diff_v2_qwen3.8-max-0902 > re
 | fail | 至少一侧没有拿到有效回答 |
 | C-R | P-C 减 P-R，衡量真正的区分能力 |
 | vs baseline | 相对基线改对和改错的 pair 数，以及精确 McNemar 检验的 p 值 |
-
-## 我们的方法：提示词是怎样生成的
-
-- **锚点检索**：
-  - 用 Joern 为每个训练修复对的修复前后版本建代码属性图，取修复改动的节点作为锚点；
-  - 过滤掉低信息锚点（如 `i++`、`return -1`），以及在超过 1% 的训练修复中都出现的代码，再用 `qwen3-embedding:8b` 向量化；
-  - 目标函数的候选操作按稀有度依次作为查询，取最近的 32 个锚点，汇总成 5 个修复对，最终保留前 3 个。
-- **diff 呈现**：每个修复对渲染为最多 60 行的 unified diff，与匹配锚点相关的改动块放在最前面。没有检索结果的函数使用与 `direct` 完全相同的提示词。
-- **保护核查**：对第一步判为有漏洞的函数，再问一次被指出的危险操作在目标函数中是否已有保护；核查调用失败时沿用第一步的判定。
-
-## 基线与消融的复现说明
-
-- **BM25 整函数检索**（`graph_diff_text_v2` 使用）：
-  - 检索部分沿用 Vul-RAG（TOSEM）作者发布的仓库 `KnowledgeRAG4LLMVulD/KnowledgeRAG4LLMVulD` 中 `vulnerability_detect.py --retrieve_by_code` 的实现：spaCy `en_core_web_sm` 分词加 `rank_bm25.BM25Okapi`（默认参数），对每个训练修复对的修复前代码建索引；
-  - 取前 20 条，按 CVE 去重，保留前 3 对；
-  - 之后的 diff 渲染和提示词与 `graph_diff_v2` 相同。
-- **零样本**（`zero_shot`）：逐字使用同一仓库 `VUL-RAG/src_baseline/baseline_detect.py` 的 `prompt_type 0`。
-  - 答案解析：取最后一个 `<result>…</result>`，含 YES 判为有漏洞，含 NO 判为无漏洞；
-  - 没有标签时追问一次，仍然失败则记为失败。
-- **VulTrial**（上一轮已跑）：提示词从作者公开的复现包（figshare `1514bc9a7aa64b46d94e`，CC BY 4.0）中原样提取，保存在 `online/vultrial_prompts.json`，流程和判定规则与原实现一致。
