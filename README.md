@@ -1,27 +1,27 @@
 # PrimeVul / PairVul 线上实验包（最后一轮）
 
-所有条件使用**同一个大模型**和同一套设置：`qwen3.8-max-0902`，思考开启，流式输出，temperature 0，seed 20261009，输出上限 8192。
+所有条件使用同一个大模型和同一套设置：`qwen3.8-max-0902`，思考开启，流式输出，temperature 0，seed 20261009，输出上限 8192。
 
-- 提示词全部**预先生成并冻结**在 `prepared/` 和 `pairvul/prepared/` 中，SHA-256 记录在 `manifest.json` 里，请不要修改。
-- 所有检索类条件的知识库都是**完整的官方训练集**：PrimeVul 3,789 个修复对，PairVul 2,317 个修复对。
-- **所有条件都必须开启思考模式**：公共参数里的 `--thinking on` 不要删掉，也不要改成别的值。上一轮的 direct 和 VulTrial 也是在思考模式下跑的，本轮必须一致。
-- **不需要先在开发集上试跑**，按下面的命令直接跑全量即可。
+- 提示词全部预先生成并冻结在 `prepared/` 和 `pairvul/prepared/` 中，SHA-256 记录在 `manifest.json` 里，请不要修改。
+- 所有检索类条件的知识库都是完整的官方训练集：PrimeVul 3,789 个修复对，PairVul 2,317 个修复对。
+- 所有条件都必须开启思考模式：公共参数里的 `--thinking on` 不要删掉，也不要改成别的值。上一轮的 direct 和 VulTrial 也是在思考模式下跑的，本轮必须一致。
+- 不需要在开发集上试跑。先做一次很小的小样本检查（第 0 步），通过后直接跑全量。
 
 ## 这一轮包括哪三组实验
 
 ### 实验一：主实验（PrimeVul，435 对）
 
-**目的**：检验我们的方法在同一个模型上是否比基线判得更准。
+目的：检验我们的方法在同一个模型上是否比基线判得更准。
 
 | 条件 | 是什么 | 本轮是否运行 |
 |---|---|---|
-| `graph_diff_v2` → `verify_graph_diff_v2` | **我们的方法**，分两步：<br>1. 锚点检索取 3 个历史修复，以修复前后的 diff 附在目标函数之后，让模型判断；<br>2. 保护核查：只对第一步判为有漏洞的函数再问一次，其余沿用第一步的结果 | 运行 |
+| `graph_diff_v2` → `verify_graph_diff_v2` | 我们的方法，分两步：<br>1. 锚点检索取 3 个历史修复，以修复前后的 diff 附在目标函数之后，让模型判断；<br>2. 保护核查：只对第一步判为有漏洞的函数再问一次，其余沿用第一步的结果 | 运行 |
 | `direct` | 基线：同一个模型，只给目标函数，让它先推理再下结论（CoT） | 上一轮已跑 |
 | `vultrial` | 基线：VulTrial（ICSE 2026，模拟法庭的多智能体方法），在同一个模型上复现 | 上一轮已跑 |
 
 ### 实验二：消融实验（PrimeVul，435 对）
 
-**目的**：每次只改动方法的一个部分，看这个部分有没有起作用。
+目的：每次只改动方法的一个部分，看这个部分有没有起作用。
 
 | 消融 | 条件 | 和谁比 | 本轮是否运行 |
 |---|---|---|---|
@@ -32,9 +32,9 @@
 
 ### 实验三：泛化实验（PairVul，586 对，在 `pairvul/` 目录）
 
-**目的**：在另一个数据集上检验方法是否仍然有效。PairVul 是 Vul-RAG 论文的基准，代码来自 Linux 内核，涉及 10 个 CWE，共 1,172 个函数。
+目的：在另一个数据集上检验方法是否仍然有效。PairVul 是 Vul-RAG 论文的基准，代码来自 Linux 内核，涉及 10 个 CWE，共 1,172 个函数。
 
-**条件**：只运行我们的方法，即 `graph_diff_v2` → `verify_graph_diff_v2` 两步。
+条件：只运行我们的方法，即 `graph_diff_v2` → `verify_graph_diff_v2` 两步。
 
 ## 准备
 
@@ -63,6 +63,18 @@
 
 ## 运行
 
+### 第 0 步：小样本检查（正式运行前做一次，在仓库根目录运行）
+
+```bash
+python smoke_test.py $M
+```
+
+- 本轮每个条件只跑前 2 个函数（一对），PrimeVul 和 PairVul 都包括，一共约 14 次调用。
+- 结果写在单独的 `results_smoke/` 和 `pairvul/results_smoke/` 中，不会混进正式结果。
+- 检查内容：接口能连通、每个函数都拿到了判定、每次调用都开启了思考模式。
+- 最后一行显示 `Smoke test passed` 就可以开始正式运行；显示 `FAILED` 请不要开始，把输出发给我们。
+- 运行中出现 `... without a stage-1 answer (skipped)` 是正常的，因为小样本只有 2 个函数。
+
 ### PrimeVul：实验一和实验二（在仓库根目录运行）
 
 第 2 条必须等第 1 条全部跑完再开始；其余各条之间没有依赖，可以并行。
@@ -75,12 +87,6 @@ python online/run_online.py run --condition verify_graph_diff_v2 --stage1 result
 python online/run_online.py run --condition graph_diff_text_v2 $M
 python online/run_online.py run --condition graph_hint_v2 $M
 python online/run_online.py run --condition graph_diff_v2_noguard $M
-```
-
-**确认思考模式已开启**：第一条命令跑出几十个函数后，运行下面的命令。输出的两个数应该相等；如果第二个数是 0，说明思考没有开启，请先停下来联系我们。
-
-```bash
-python -c "import json,sys; ok=[r for r in (json.loads(l) for l in open(sys.argv[1], encoding='utf-8') if l.endswith('}\n')) if r.get('status')=='ok']; print(len(ok), 'ok;', sum(r.get('reasoning_chars', 0) > 0 for r in ok), 'with thinking')" results/predictions_graph_diff_v2_qwen3.8-max-0902.jsonl
 ```
 
 打分：
@@ -105,13 +111,14 @@ python online/run_online.py score --baseline graph_diff_v2_qwen3.8-max-0902 > re
 
 | 实验 | 条件 | 调用次数 |
 |---|---|---:|
+| 小样本检查 | 全部条件各 2 个函数 | 约 14 |
 | 实验一 | graph_diff_v2 | 870 |
 | 实验一 | verify_graph_diff_v2 | 约 700 |
 | 实验二 | graph_diff_text_v2、graph_hint_v2、graph_diff_v2_noguard | 各 870 |
 | 实验三 | graph_diff_v2 | 1,172 |
 | 实验三 | verify_graph_diff_v2 | 约 900 |
 
-合计约 6,250 次。
+正式运行合计约 6,250 次。
 
 ## 注意事项
 
@@ -125,14 +132,14 @@ python online/run_online.py score --baseline graph_diff_v2_qwen3.8-max-0902 > re
 | 报错 | 处理 |
 |---|---|
 | `HTTP 400`，提到 `seed` | 加 `--seed -1` |
-| `HTTP 400`，提到 `enable_thinking` | **不要**改成 `--thinking default` 或 `off`，请先停下来联系我们 |
+| `HTTP 400`，提到 `enable_thinking` | 不要改成 `--thinking default` 或 `off`，请先停下来联系我们 |
 | `HTTP 429`（请求太频繁） | 降低并发，例如 `--workers 4` |
 
 ## 打分各列的含义
 
 | 列 | 含义 |
 |---|---|
-| P-C | 漏洞版判为有漏洞、修复版判为安全，两侧都对，**主要指标** |
+| P-C | 漏洞版判为有漏洞、修复版判为安全，两侧都对，主要指标 |
 | P-V / P-B | 两侧都判有漏洞 / 都判安全 |
 | P-R | 两侧都判反 |
 | fail | 至少一侧没有拿到有效回答 |
