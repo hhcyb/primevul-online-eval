@@ -1,50 +1,40 @@
 {
- "created_utc": "2026-10-13T04:27:12+00:00",
- "functions": 870,
- "pairs": 435,
- "dev_a_pairs": 100,
- "graph_diff_functions_with_evidence": 736,
- "graph_diff_counts": {
-  "cards": 2220,
-  "dropped_leakage": 57,
-  "functions_with_examples": 736,
-  "leakage_excluded_train_pairs": 44
+ "round": "final online round (2026-10-21): full official training sets as knowledge bases",
+ "model_settings": {
+  "model": "qwen3.8-max-0902",
+  "thinking": "on",
+  "stream": "on",
+  "temperature": 0,
+  "seed": 20261009,
+  "max_output_tokens": 8192
  },
- "diff_max_lines": 60,
- "inputs_sha256": {
-  "test": "b4d17371e8345c6e11d9e5a6c9620ac584c1d9c7226909b39bf154cb2d57a158",
-  "knowledge": "8b4eb6f147843d4b313d7f79b92fb43ea6e50b6f6289448ab85608b005f6ae70",
-  "evidence": "af843240df15343efbbdf655d3b762b1736eed08fdbb2e8dee76f62e12078fed",
-  "dev_pairs": "8268e4437a7e3fdd96a323326367f6ea05085715fd1b6fadb22b43edff13f532"
+ "main_method": "graph_diff_v2 -> verify_graph_diff_v2 (protection check only on functions flagged in step 1)",
+ "knowledge_base": {
+  "primevul_training_pairs": 3789,
+  "pairvul_training_pairs": 2317,
+  "leakage_exclusion": "none (same-CVE training pairs are kept)"
  },
- "code_sha256": {
-  "prepare": "2c14f1eed36ab8b6bc478dc65cd113229e0da7b83310393b7c858c4a6df90967",
-  "prompts": "899b775b52c46bcea2dbea6b9234783761bcde0904bfdaa4c3379e127ccd2b2e",
-  "local_runner": "7fae96ef97d024ae2e3fa82ce2f47c273ce7fdad5255ccd0d7c4556340f056a1"
+ "anchor_retrieval": {
+  "graphs": "Joern 4.0.583 code property graphs of each training repair",
+  "embedding_model": "qwen3-embedding:8b",
+  "top_entities": 32,
+  "top_pairs": 5,
+  "examples": 3,
+  "diff_max_lines": 60
  },
  "files_sha256": {
+  "online/run_online.py": "d32221ff645994f43de1d49b9ab8abec2d882c206706c220e98c63b2d11e2c31",
+  "online/vultrial_prompts.json": "8a57ba64fdafbb9fb6f2512d387106511840c063c54d1587012725eb1391e188",
+  "pairvul/online/run_online.py": "d32221ff645994f43de1d49b9ab8abec2d882c206706c220e98c63b2d11e2c31",
+  "pairvul/prepared/direct.jsonl": "9fffbfa2f2821d83f694022d0ba78e7e28e0951f33909d1d15ced964b1381727",
+  "pairvul/prepared/graph_diff_v2.jsonl": "e8079c6bcff5fe4fc3c6406d227b13f06cd93d0f4e65517b74c2c8a5d6f82368",
+  "pairvul/prepared/labels.jsonl": "f62ef4cac1177d8f854fc7279b76eb7186e4650a2cab5838981fd4f59814f250",
   "prepared/direct.jsonl": "5538125aaa3c6d29014950f5214c3d1e50865e6b80c0c7f71ab7094a28dc893f",
-  "prepared/graph_diff.jsonl": "4a7def2efd0dbdcef788bc8f5872023793d54c230ebc39848ca4acdb298b9557",
-  "prepared/labels.jsonl": "f0f0d6610138275ce1b5d4d94bf7238f114268d69734503f9d0c65171b22b930"
- },
- "baselines": {
-  "source": "KnowledgeRAG4LLMVulD/KnowledgeRAG4LLMVulD, VUL-RAG/src_baseline/baseline_detect.py (sha256 6bf3fe67c216a957f4336c210db76128938f5ef716c9b3b48a46a62904f62077)",
-  "retriever": "BM25 k1=1.2 b=0.75 over training vulnerable functions, top-1",
-  "leakage_excluded_train_pairs": 44,
-  "indexed_train_pairs": 3745,
-  "inputs_sha256": {
-   "knowledge": "8b4eb6f147843d4b313d7f79b92fb43ea6e50b6f6289448ab85608b005f6ae70",
-   "test_identities": "203d925eaf0ab62fc149cbfe9f295e3ba8b4c10074cfc64508e3de0561587b6d"
-  },
-  "files_sha256": {
-   "prepared/zero_shot.jsonl": "90e6491bfe1fc1e93143935ef73150c57960b425babd0f9ecc48e53fc2aceabd",
-   "prepared/code_rag.jsonl": "3856c527b5a159a38f7b90343ab5954a64eb53e756ef23ea4d200b6211ff8cac"
-  },
-  "code_rag_retrieval": {
-   "functions": 870,
-   "same_cwe": 99,
-   "same_project": 508,
-   "est_tokens_over_30k": 116
-  }
+  "prepared/graph_diff_text_v2.jsonl": "05cd6cffaf64d201d55447bf9ea2ffd15b87babd5883583b2585cc213e1550fc",
+  "prepared/graph_diff_v2.jsonl": "6630de3200785497515e0be163edb2734f8a3f7eb2fd094e521802c8c2d9208d",
+  "prepared/graph_diff_v2_noguard.jsonl": "95e2fe2e6ae8756ebd03d6a6d9baf9f5d2d4b8e674f75353d13c48aee9c23b7e",
+  "prepared/graph_hint_v2.jsonl": "204115d8672fc246384eb3639bdc9efb9e1d18abf606b806e1ec360189f59535",
+  "prepared/labels.jsonl": "f0f0d6610138275ce1b5d4d94bf7238f114268d69734503f9d0c65171b22b930",
+  "prepared/zero_shot.jsonl": "90e6491bfe1fc1e93143935ef73150c57960b425babd0f9ecc48e53fc2aceabd"
  }
 }

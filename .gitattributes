@@ -1,3 +1,5 @@
-# keep the frozen prompts byte-identical (their SHA-256 is in manifest.json)
+# keep the frozen prompts and the runner byte-identical (their SHA-256 is in manifest.json)
 prepared/** -text
-online/vultrial_prompts.json -text
+pairvul/prepared/** -text
+online/** -text
+pairvul/online/** -text
