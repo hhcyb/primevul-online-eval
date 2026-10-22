@@ -15,6 +15,7 @@ import json
 import math
 import os
 from pathlib import Path
+import random
 import re
 import sys
 import threading
@@ -40,6 +41,46 @@ def file_sha256(path):
 def read_rows(path):
     with open(path, encoding='utf-8') as stream:
         return [json.loads(line) for line in stream if line.strip()]
+
+
+def read_results(path):
+    """Result files (predictions_*.jsonl): like read_rows, but an incomplete line from an interrupted or still
+    running write is skipped instead of stopping the program."""
+    rows = []
+    with open(path, encoding='utf-8') as stream:
+        for line in stream:
+            if line.strip():
+                try:
+                    rows.append(json.loads(line))
+                except ValueError:
+                    pass
+    return rows
+
+
+def repair_tail(path):
+    """Drop an incomplete last line left by an interrupted write, so that appending keeps the file valid JSONL."""
+    data = path.read_bytes()
+    if data and not data.endswith(b'\n'):
+        with open(path, 'r+b') as stream:
+            stream.truncate(data.rfind(b'\n') + 1)
+        say(f'{path.name}: removed an incomplete last line left by an interrupted write')
+
+
+def lock_run(path):
+    """One process per run: a second copy of the same command would pay for every call twice. The OS releases the
+    lock when the process ends, however it ends."""
+    handle = open(path, 'a+')
+    try:
+        if os.name == 'nt':
+            import msvcrt
+            msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl
+            fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        sys.exit(f'{path.name[len(".lock_"):]} is already running in another window; '
+                 'do not start the same command twice.')
+    return handle
 
 
 def extract_json(raw):
@@ -156,6 +197,9 @@ def post(args, body, stream):
 def call(args, messages, max_tokens, thinking):
     body, stream = request_body(args, messages, max_tokens, thinking)
     for attempt in range(args.retries):
+        # 5, 10, 20, 40, 80, 160, 300 s (about 10 minutes with the default 8 attempts), jittered so that the
+        # workers do not retry in lockstep after a network outage.
+        wait = min(300, 5 * 2 ** attempt) * random.uniform(0.75, 1.25)
         try:
             return post(args, body, stream)
         except urllib.error.HTTPError as exc:
@@ -163,11 +207,14 @@ def call(args, messages, max_tokens, thinking):
             if exc.code in (400, 401, 403, 404):
                 raise PermanentError(f'HTTP {exc.code}: {detail}')
             error = f'HTTP {exc.code}: {detail}'
+            after = (exc.headers or {}).get('Retry-After') if exc.code == 429 else None
+            if after and str(after).strip().isdigit():
+                wait = max(wait, min(600, int(after)))
         except Exception as exc:  # network, timeout, malformed stream
             error = f'{type(exc).__name__}: {exc}'[:300]
         if attempt == args.retries - 1:
             raise RuntimeError(error)
-        time.sleep(min(60, 3 * 2 ** attempt))
+        time.sleep(wait)
 
 
 def classify(args, row):
@@ -403,11 +450,11 @@ def stage1_reason(raw):
     return re.sub(r'<think>.*?</think>', '', str(raw or ''), flags=re.S).strip()[-1500:]
 
 
-def verify_rows(rows, stage1_path):
+def verify_rows(rows, stage1_path, allow_missing=False):
     """Second-stage protection check: functions the stage-1 run flagged get one verification call that sees the
     same prompt plus the stage-1 finding; functions it called safe keep 0 without a call."""
     stage1 = {}
-    for r in read_rows(stage1_path):
+    for r in read_results(stage1_path):
         if r.get('prediction') is not None:
             stage1[r['sample_id']] = r
     out, missing = [], 0
@@ -425,6 +472,9 @@ def verify_rows(rows, stage1_path):
                                                                 {'role': 'user', 'content': user}]})
     say(f'stage 1: {sum("messages" in r for r in out)} flagged functions to verify, '
         f'{sum("fixed_prediction" in r for r in out)} kept safe, {missing} without a stage-1 answer (skipped)')
+    if missing and not allow_missing:
+        sys.exit(f'stage 1 is incomplete: {missing} functions have no verdict in {Path(stage1_path).name}. '
+                 'Run the stage-1 command again until it reports no failures, then start this step.')
     return out
 
 
@@ -529,7 +579,7 @@ def run(args):
     if args.condition in VERIFY_CONDITIONS:
         if not args.stage1:
             sys.exit('--stage1 <predictions file of the stage-1 run> is required for verify conditions')
-        rows = verify_rows(rows, args.stage1)
+        rows = verify_rows(rows, args.stage1, allow_missing=bool(args.limit))
     if args.condition == 'graph_diff_community':
         if not args.reports:
             sys.exit('--reports results/build_community_report_<run>.jsonl is required for graph_diff_community')
@@ -583,6 +633,7 @@ def run(args):
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
     name = run_name(args)
+    run_lock = lock_run(out_dir / f'.lock_{name}')  # noqa: F841 (held until the process exits)
     # Knowledge-base and summary runs are inputs of a later Vul-RAG step; `score` only reads predictions_*.jsonl.
     prefix = 'build_' if args.condition in BUILD_CONDITIONS else 'predictions_'
     out, cfg_path = out_dir / f'{prefix}{name}.jsonl', out_dir / f'run_config_{name}.json'
@@ -608,7 +659,9 @@ def run(args):
     elif out.exists() and out.stat().st_size:
         sys.exit(f'{out.name} exists without {cfg_path.name}; use a new --tag.')
     cfg_path.write_text(json.dumps({'config_hash': config_hash, 'config': config}, indent=1), encoding='utf-8')
-    done = {r['sample_id'] for r in read_rows(out) if not str(r.get('status', '')).startswith('error')} \
+    if out.exists():
+        repair_tail(out)
+    done = {r['sample_id'] for r in read_results(out) if not str(r.get('status', '')).startswith('error')} \
         if out.exists() else set()
     todo = [r for r in rows if r['sample_id'] not in done]
     say(f'{name}: {len(done)} done, {len(todo)} to run, {args.workers} workers')
@@ -621,16 +674,34 @@ def run(args):
                    else pool.submit(worker, args, r) if worker is not None
                    else pool.submit(classify_steps, args, r) if 'steps' in r
                    else pool.submit(classify, args, r) for r in todo]
-        # Written as each call finishes, so an interrupted run keeps everything already answered.
-        for i, future in enumerate(cf.as_completed(futures), 1):
+        def save(future):
             result = future.result()
             result.update(condition=args.condition, model=args.model, run=name, config_hash=config_hash)
             with lock, open(out, 'a', encoding='utf-8') as stream:
                 stream.write(json.dumps(result, ensure_ascii=False) + '\n')
             counts[result['status']] += 1
-            if i % 20 == 0 or i == len(todo):
-                rate = (time.time() - started) / i
-                say(f'  {len(done) + i}/{len(rows)}  {dict(counts)}  ~{rate * (len(todo) - i) / 60:.0f} min left')
+
+        # Written as each call finishes, so an interrupted run keeps everything already answered.
+        saved = set()
+        try:
+            for i, future in enumerate(cf.as_completed(futures), 1):
+                save(future)
+                saved.add(future)
+                if i % 20 == 0 or i == len(todo):
+                    rate = (time.time() - started) / i
+                    say(f'  {len(done) + i}/{len(rows)}  {dict(counts)}  ~{rate * (len(todo) - i) / 60:.0f} min left')
+        except BaseException as exc:
+            cancelled = sum(f.cancel() for f in futures)
+            running = [f for f in futures if f not in saved and not f.cancelled()]
+            say(f'stopping ({type(exc).__name__}): {cancelled} queued calls cancelled; waiting for the '
+                f'{len(running)} calls already running so their answers are saved')
+            for future in running:
+                try:
+                    save(future)
+                except Exception as error:  # e.g. the disk is still full
+                    say(f'  could not save {future}: {error}')
+            say('stopped; run the same command again to continue where it left off.')
+            raise
     failed = sum(v for k, v in counts.items() if k.startswith('error'))
     if failed:
         say(f'{failed} calls failed; run the same command again to retry only those.')
@@ -651,7 +722,7 @@ def score(args):
     runs = {}
     for path in sorted(Path(args.out).glob('predictions_*.jsonl')):
         latest = {}
-        for r in read_rows(path):
+        for r in read_results(path):
             latest[r['sample_id']] = r  # a retried call overrides its earlier error row
         runs[path.stem[len('predictions_'):]] = {s: r.get('prediction') for s, r in latest.items()}
     if not runs:
@@ -733,7 +804,7 @@ def main():
     r.add_argument('--stream', choices=['auto', 'on', 'off'], default='auto', help='auto = stream when thinking is on')
     r.add_argument('--extra-body', default='', help='JSON merged into every request body')
     r.add_argument('--timeout', type=int, default=900)
-    r.add_argument('--retries', type=int, default=5)
+    r.add_argument('--retries', type=int, default=8, help='attempts per call (about 10 minutes of back-off)')
     r.add_argument('--subset', choices=['all', 'dev_a', 'rq2', 'sample'], default='all',
                    help='dev_a = the 100 development pairs only (pilot); rq2 = the fixed 100-pair ablation subset; '
                         'a later full run reuses those results')
