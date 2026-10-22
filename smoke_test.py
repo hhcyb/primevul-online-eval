@@ -78,6 +78,8 @@ def main():
                 continue
             cmd += ['--stage1', str(stage1)]
         cmd += ['--limit', str(LIMIT), '--tag', 'smoke', '--out', str(base / 'results_smoke')]
+        if option(extra, '--retries') is None:
+            cmd += ['--retries', '3']  # fail within about a minute if the endpoint is wrong or down
         print(f'--- {where} {condition}', flush=True)
         subprocess.run(cmd, cwd=base)
         problems = check(predictions(base, condition, model))

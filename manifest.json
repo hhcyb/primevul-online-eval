@@ -35,6 +35,6 @@
   "prepared/graph_diff_v2_noguard.jsonl": "95e2fe2e6ae8756ebd03d6a6d9baf9f5d2d4b8e674f75353d13c48aee9c23b7e",
   "prepared/graph_hint_v2.jsonl": "204115d8672fc246384eb3639bdc9efb9e1d18abf606b806e1ec360189f59535",
   "prepared/labels.jsonl": "f0f0d6610138275ce1b5d4d94bf7238f114268d69734503f9d0c65171b22b930",
-  "smoke_test.py": "43902e4130101b460036af0383f44b62492b147988560dac461aa46c619aaabb"
+  "smoke_test.py": "e9e48e1c763155217ddb4ce82cee75a419aa1bf6c4bc7a1a7602e96dcf0d29d2"
  }
 }
