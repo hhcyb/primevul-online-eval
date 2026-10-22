@@ -232,8 +232,9 @@ def classify(args, row):
             follow = row['messages'] + [{'role': 'assistant', 'content': content},
                                         {'role': 'user', 'content': retry_prompt}]
             retry, _, _, retry_usage = call(args, follow, 256, 'off' if args.thinking == 'on' else args.thinking)
+            content = content + '\n[verdict-retry]\n' + retry  # kept even if the retry cannot be parsed either
             prediction = parse(retry)
-            content, status = content + '\n[verdict-retry]\n' + retry, 'ok_after_retry'
+            status = 'ok_after_retry'
     except PermanentError as exc:
         status, error = 'error:permanent', str(exc)
     except Exception as exc:
