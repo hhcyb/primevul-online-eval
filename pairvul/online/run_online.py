@@ -490,7 +490,8 @@ def verify_rows(rows, stage1_path, allow_missing=False):
         f'{sum("fixed_prediction" in r for r in out)} kept safe, {missing} without a stage-1 answer (skipped)')
     if missing and not allow_missing:
         sys.exit(f'stage 1 is incomplete: {missing} functions have no verdict in {Path(stage1_path).name}. '
-                 'Run the stage-1 command again until it reports no failures, then start this step.')
+                 'Run the stage-1 command again until it reports no failures, then start this step. If a few '
+                 'functions still fail after several reruns, add --allow-incomplete-stage1 (they count as failed).')
     return out
 
 
@@ -595,7 +596,7 @@ def run(args):
     if args.condition in VERIFY_CONDITIONS:
         if not args.stage1:
             sys.exit('--stage1 <predictions file of the stage-1 run> is required for verify conditions')
-        rows = verify_rows(rows, args.stage1, allow_missing=bool(args.limit))
+        rows = verify_rows(rows, args.stage1, allow_missing=bool(args.limit) or args.allow_incomplete_stage1)
     if args.condition == 'graph_diff_community':
         if not args.reports:
             sys.exit('--reports results/build_community_report_<run>.jsonl is required for graph_diff_community')
@@ -798,6 +799,8 @@ def main():
                             'graph_diff_text_v2'],
                    help='vulrag_kb / vulrag_summary build Vul-RAG inputs; vulrag(_sample10) is its detection step')
     r.add_argument('--stage1', default='', help='verify conditions only: predictions file of the stage-1 run')
+    r.add_argument('--allow-incomplete-stage1', action='store_true',
+                   help='verify only: start although some stage-1 functions have no verdict (they count as failed)')
     r.add_argument('--reports', default='', help='graph_diff_community only: the community_report build file')
     r.add_argument('--kb-part', choices=['sample10', 'rest', 'all'], default='all',
                    help='vulrag_kb only: the CWE-stratified 10%% sample, the remaining pairs, or both')
