@@ -1,0 +1,30 @@
+{
+ "purpose": "5% pilot for the cost estimate (pilot.py)",
+ "seed": 20261009,
+ "fraction": 0.05,
+ "size": 22,
+ "pair_ids": [
+  "test-pair-000042",
+  "test-pair-000048",
+  "test-pair-000071",
+  "test-pair-000098",
+  "test-pair-000102",
+  "test-pair-000118",
+  "test-pair-000132",
+  "test-pair-000133",
+  "test-pair-000154",
+  "test-pair-000171",
+  "test-pair-000174",
+  "test-pair-000236",
+  "test-pair-000274",
+  "test-pair-000332",
+  "test-pair-000340",
+  "test-pair-000341",
+  "test-pair-000347",
+  "test-pair-000400",
+  "test-pair-000404",
+  "test-pair-000405",
+  "test-pair-000422",
+  "test-pair-000428"
+ ]
+}

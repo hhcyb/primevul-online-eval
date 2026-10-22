@@ -76,6 +76,16 @@ python smoke_test.py $M
 - 最后一行显示 `Smoke test passed` 就可以开始正式运行；显示 `FAILED` 请不要开始，把输出发给我们。
 - 运行中出现 `... without a stage-1 answer (skipped)` 是正常的，因为小样本只有 2 个函数。
 
+### 第 0.5 步：5% 试算费用（在仓库根目录运行）
+
+```bash
+python pilot.py $M
+```
+
+- 按固定随机种子抽 5% 的对（PrimeVul 22 对、PairVul 29 对，名单在 `prepared/sample_pairs.json` 和 `pairvul/prepared/sample_pairs.json`），把本轮每个条件真实跑一遍，约 310 次调用，约 1.5 小时，约 200–240 元。
+- 跑完自动按实测 tokens 估算全量费用，并给出 90% 区间。PrimeVul 的条件会以上一轮 direct 在同一批函数上的 tokens 为基准换算，所以要先把上一轮的 `results/` 放好。价格不同时可以重新估算：`python estimate_cost.py --price-in 12 --price-out 36`。
+- 第一步的试算结果直接写进正式结果文件，正式运行会自动跳过这些函数，不会重复付费；只有保护核查的试算（约 80 次调用）是额外的。
+
 ### PrimeVul：实验一和实验二（在仓库根目录运行）
 
 第 2 条（保护核查）必须等第 1 条全部跑完、并且没有失败的调用后再开始；提前开始时程序会拒绝运行并提示。其余各条之间没有依赖。
