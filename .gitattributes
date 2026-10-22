@@ -4,5 +4,3 @@ pairvul/prepared/** -text
 online/** -text
 pairvul/online/** -text
 smoke_test.py -text
-pilot.py -text
-estimate_cost.py -text

@@ -19,16 +19,18 @@
 | `direct` | 基线：同一个模型，只给目标函数，让它先推理再下结论（CoT） | 上一轮已跑 |
 | `vultrial` | 基线：VulTrial（ICSE 2026，模拟法庭的多智能体方法），在同一个模型上复现 | 上一轮已跑 |
 
-### 实验二：消融实验（PrimeVul，435 对）
+### 实验二：消融实验（PrimeVul，固定的 200 对）
 
 目的：每次只改动方法的一个部分，看这个部分有没有起作用。
+
+三个需要运行的消融使用同一批 200 对（从全部 435 对中随机抽取，随机种子 20261010，名单在 `prepared/sample_pairs.json`），与主方法在同样这 200 对上比较。去掉保护核查不需要额外调用，在全部 435 对上比较。
 
 | 消融 | 条件 | 和谁比 | 本轮是否运行 |
 |---|---|---|---|
 | 去掉保护核查 | `graph_diff_v2`（第一步的结果） | 我们的方法 | 主实验已包含，不需要另跑 |
-| 锚点检索换成 BM25 整函数检索 | `graph_diff_text_v2` | `graph_diff_v2` | 运行 |
-| diff 换成 JSON 子图（检索结果相同） | `graph_hint_v2` | `graph_diff_v2` | 运行 |
-| 去掉防误判提示 | `graph_diff_v2_noguard` | `graph_diff_v2` | 运行 |
+| 锚点检索换成 BM25 整函数检索 | `graph_diff_text_v2` | `graph_diff_v2` | 运行（200 对） |
+| diff 换成 JSON 子图（检索结果相同） | `graph_hint_v2` | `graph_diff_v2` | 运行（200 对） |
+| 去掉防误判提示 | `graph_diff_v2_noguard` | `graph_diff_v2` | 运行（200 对） |
 
 ### 实验三：泛化实验（PairVul，586 对，在 `pairvul/` 目录）
 
@@ -76,16 +78,6 @@ python smoke_test.py $M
 - 最后一行显示 `Smoke test passed` 就可以开始正式运行；显示 `FAILED` 请不要开始，把输出发给我们。
 - 运行中出现 `... without a stage-1 answer (skipped)` 是正常的，因为小样本只有 2 个函数。
 
-### 第 0.5 步：5% 试算费用（在仓库根目录运行）
-
-```bash
-python pilot.py $M
-```
-
-- 按固定随机种子抽 5% 的对（PrimeVul 22 对、PairVul 29 对，名单在 `prepared/sample_pairs.json` 和 `pairvul/prepared/sample_pairs.json`），把本轮每个条件真实跑一遍，约 310 次调用，约 1.5 小时，约 200–240 元。
-- 跑完自动按实测 tokens 估算全量费用，并给出 90% 区间。PrimeVul 的条件会以上一轮 direct 在同一批函数上的 tokens 为基准换算，所以要先把上一轮的 `results/` 放好。价格不同时可以重新估算：`python estimate_cost.py --price-in 12 --price-out 36`。
-- 第一步的试算结果直接写进正式结果文件，正式运行会自动跳过这些函数，不会重复付费；只有保护核查的试算（约 80 次调用）是额外的。
-
 ### PrimeVul：实验一和实验二（在仓库根目录运行）
 
 第 2 条（保护核查）必须等第 1 条全部跑完、并且没有失败的调用后再开始；提前开始时程序会拒绝运行并提示。其余各条之间没有依赖。
@@ -94,10 +86,10 @@ python pilot.py $M
 # 实验一：我们的方法（两步）
 python online/run_online.py run --condition graph_diff_v2 $M
 python online/run_online.py run --condition verify_graph_diff_v2 --stage1 results/predictions_graph_diff_v2_qwen3.8-max-0902.jsonl $M
-# 实验二：消融
-python online/run_online.py run --condition graph_diff_text_v2 $M
-python online/run_online.py run --condition graph_hint_v2 $M
-python online/run_online.py run --condition graph_diff_v2_noguard $M
+# 实验二：消融（只跑固定的 200 对）
+python online/run_online.py run --condition graph_diff_text_v2 --subset sample $M
+python online/run_online.py run --condition graph_hint_v2 --subset sample $M
+python online/run_online.py run --condition graph_diff_v2_noguard --subset sample $M
 ```
 
 打分：
@@ -107,7 +99,7 @@ python online/run_online.py score --baseline direct_qwen3.8-max-0902 > results/s
 python online/run_online.py score --baseline graph_diff_v2_qwen3.8-max-0902 > results/score_vs_graph_diff_v2.txt
 ```
 
-第一个文件是实验一（各方法对比 direct），第二个文件是实验二（各消融对比 `graph_diff_v2`）。
+第一个文件是实验一（各方法对比 direct）。第二个文件是实验二（各消融对比 `graph_diff_v2`）：三个消融看其中 `sample subset (200 pairs)` 一节；它们只跑了这 200 对，在 `all 435 pairs` 一节里显示为大量 fail，这是正常的。去掉保护核查看 `all 435 pairs` 一节中 `verify_graph_diff_v2` 那一行。
 
 ### PairVul：实验三（在 `pairvul/` 目录运行）
 
@@ -124,23 +116,23 @@ python online/run_online.py score --baseline graph_diff_v2_qwen3.8-max-0902 > re
 
 | 窗口 | 依次运行 | 调用次数 | 预计耗时 |
 |---|---|---:|---:|
-| 1 | PrimeVul `graph_diff_v2` → `verify_graph_diff_v2` → `graph_diff_v2_noguard` | 约 2,430 | 约 41 小时 |
-| 2 | PairVul `graph_diff_v2` → `verify_graph_diff_v2` | 约 2,100 | 约 36 小时 |
-| 3 | PrimeVul `graph_diff_text_v2` → `graph_hint_v2` | 1,740 | 约 30 小时 |
+| 1 | PrimeVul `graph_diff_v2` → `verify_graph_diff_v2` | 约 1,560 | 约 22 小时 |
+| 2 | PairVul `graph_diff_v2` → `verify_graph_diff_v2` | 约 2,100 | 约 22 小时 |
+| 3 | PrimeVul 三个消融（各 200 对）：`graph_diff_text_v2` → `graph_hint_v2` → `graph_diff_v2_noguard` | 1,200 | 约 21 小时 |
 
-全部跑完约需 1.5–2 天。耗时按上一轮的实测速度估算：每个窗口（8 路并发）每小时约完成 59 次调用，平均每次调用约 8 分钟，主要花在思考上。
+全部跑完约需 1 天。耗时按上一轮的实测速度估算：输出约 2 万 tokens 的调用，每个窗口（8 路并发）每小时约完成 59 次；保护核查和 PairVul 的输出更短，速度相应更快。
 
 ## 用量与费用估算
 
 | 项目 | 估算 |
 |---|---:|
-| 调用次数 | 约 6,270 次（另有小样本检查约 14 次） |
-| 输入 tokens | 约 1,700 万 |
-| 输出 tokens（含思考） | 约 1.07–1.25 亿 |
-| 费用（按百炼公开价：输入 12 元、输出 36 元每百万 tokens） | 约 4,000–4,700 元 |
+| 调用次数 | 约 4,860 次（另有小样本检查约 14 次） |
+| 输入 tokens | 约 1,260 万 |
+| 输出 tokens（含思考） | 约 7,500–7,900 万 |
+| 费用（按百炼公开价：输入 12 元、输出 36 元每百万 tokens） | 约 2,850–3,000 元；建议按约 3,500 元准备预算 |
 
-- 输出按上一轮实测估算：每次调用平均约 2 万个输出 tokens，几乎都是思考过程，中位数约 1.7 万；个别调用超过 10 万。
-- 费用的 90% 以上来自输出。PairVul 的函数较短，实际用量可能偏低。
+- 估算方法：每次调用的输出 tokens 以上一轮线上实测为准（同类条件平均约 2 万，几乎都是思考过程）。保护核查约为第一步的 0.55–0.62 倍，PairVul 约为 PrimeVul 的 0.72–0.76 倍，这两个比例取自本地 qwen3.8:27b 的全量运行。
+- 费用的 95% 以上来自输出。个别调用会超过 10 万 tokens，所以预算按上限再留约 15%。
 - 以上是按公开价的估算，实际以接口账单为准。
 
 ## 注意事项
