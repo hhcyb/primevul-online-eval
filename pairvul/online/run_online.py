@@ -123,6 +123,16 @@ def parse_verdict(raw):
     return VERDICTS[key]
 
 
+def salvage_verdict(raw):
+    """Follow-up only: the 256-token follow-up can cut the JSON inside a long "reason" before the object closes; the
+    verdict is the first field, so take it from the unclosed object."""
+    text = re.sub(r'<think>.*?</think>', '', str(raw or ''), flags=re.S)
+    found = re.findall(r'\{\s*"vulnerable"\s*:\s*"?(0|1|true|false|yes|no)\b', text, re.IGNORECASE)
+    if not found:
+        raise ValueError('No JSON object in reply')
+    return VERDICTS[found[-1].lower()]
+
+
 class PermanentError(Exception):
     pass
 
@@ -233,7 +243,12 @@ def classify(args, row):
                                         {'role': 'user', 'content': retry_prompt}]
             retry, _, _, retry_usage = call(args, follow, 256, 'off' if args.thinking == 'on' else args.thinking)
             content = content + '\n[verdict-retry]\n' + retry  # kept even if the retry cannot be parsed either
-            prediction = parse(retry)
+            try:
+                prediction = parse(retry)
+            except ValueError:
+                if tagged:
+                    raise
+                prediction = salvage_verdict(retry)  # JSON cut inside a long "reason"; the verdict came first
             status = 'ok_after_retry'
     except PermanentError as exc:
         status, error = 'error:permanent', str(exc)
